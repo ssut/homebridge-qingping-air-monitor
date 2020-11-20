@@ -10,7 +10,7 @@ import {
   QingpingHomebridgePlatform,
   QingpingHomebridgePlatformConfig,
 } from './platform';
-import { QingpingDevice } from './qingping';
+import { QingpingDevice, QingpingDeviceData } from './qingping';
 
 /**
  * Platform Accessory
@@ -71,6 +71,18 @@ export class QingpingAirMonitorAccessory {
     ].filter((x) => x !== undefined);
   }
 
+  private onCharacteristicGetValue = (
+    field: keyof QingpingDeviceData,
+    callback: Function,
+  ) => {
+    const value = this.data[field]?.value;
+    if (!value) {
+      return callback(new Error(`Undefined characteristic value for ${field}`));
+    }
+
+    callback(null, value);
+  };
+
   private getHumidityService() {
     const humidityService =
       this.accessory.getService(this.platform.Service.HumiditySensor) ??
@@ -81,7 +93,7 @@ export class QingpingAirMonitorAccessory {
     );
     humidityService
       .getCharacteristic(this.platform.Characteristic.CurrentRelativeHumidity)
-      .on('get', () => this.data.humidity.value);
+      .on('get', this.onCharacteristicGetValue.bind(this, 'humidity'));
 
     return humidityService;
   }
@@ -96,7 +108,7 @@ export class QingpingAirMonitorAccessory {
     );
     temperatureService
       .getCharacteristic(this.platform.Characteristic.CurrentTemperature)
-      .on('get', () => this.data.temperature.value);
+      .on('get', this.onCharacteristicGetValue.bind(this, 'temperature'));
 
     return temperatureService;
   }
@@ -115,14 +127,19 @@ export class QingpingAirMonitorAccessory {
     );
     batteryService
       .getCharacteristic(this.platform.Characteristic.BatteryLevel)
-      .on('get', () => {
+      .on('get', (_, callback) => {
         const batteryPercentage = this.data.battery.value;
 
         if (batteryPercentage > 20) {
-          return this.platform.Characteristic.StatusLowBattery
-            .BATTERY_LEVEL_NORMAL;
+          return callback(
+            null,
+            this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL,
+          );
         }
-        return this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW;
+        return callback(
+          null,
+          this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW,
+        );
       });
 
     return batteryService;
@@ -138,10 +155,10 @@ export class QingpingAirMonitorAccessory {
     );
     airQualityService
       .getCharacteristic(this.platform.Characteristic.PM2_5Density)
-      .on('get', () => this.data.pm25.value);
+      .on('get', this.onCharacteristicGetValue.bind(this, 'pm25'));
     airQualityService
       .getCharacteristic(this.platform.Characteristic.VOCDensity)
-      .on('get', () => this.data.tvoc.value);
+      .on('get', this.onCharacteristicGetValue.bind(this, 'tvoc'));
 
     return airQualityService;
   }
@@ -156,7 +173,7 @@ export class QingpingAirMonitorAccessory {
     );
     carbonDioxideService
       .getCharacteristic(this.platform.Characteristic.CarbonDioxideLevel)
-      .on('get', () => this.data.co2.value);
+      .on('get', this.onCharacteristicGetValue.bind(this, 'co2'));
 
     return carbonDioxideService;
   }
