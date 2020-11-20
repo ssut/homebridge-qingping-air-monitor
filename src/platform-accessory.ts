@@ -127,20 +127,7 @@ export class QingpingAirMonitorAccessory {
     );
     batteryService
       .getCharacteristic(this.platform.Characteristic.BatteryLevel)
-      .on('get', (callback) => {
-        const batteryPercentage = this.data.battery.value;
-
-        if (batteryPercentage > 20) {
-          return callback(
-            null,
-            this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL,
-          );
-        }
-        return callback(
-          null,
-          this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW,
-        );
-      });
+      .on('get', this.onCharacteristicGetValue.bind(this, 'battery'));
 
     return batteryService;
   }
