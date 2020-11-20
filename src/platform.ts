@@ -59,9 +59,12 @@ export class QingpingHomebridgePlatform implements DynamicPlatformPlugin {
     });
     this.log.debug('Finished initializing platform:', this.config.name);
 
+    this.initialize();
+
     this.api.on(APIEvent.DID_FINISH_LAUNCHING, () => {
       log.debug('Executed didFinishLaunching callback');
       this.handleFinishLaunching?.();
+      this.discoverDevices();
     });
   }
 
@@ -69,13 +72,12 @@ export class QingpingHomebridgePlatform implements DynamicPlatformPlugin {
     const config = this.config as QingpingHomebridgePlatformConfig;
 
     try {
-      const client = new QingpingClient(
-        config.appKey,
-        config.appSecret,
-        config.interval || 5000,
-      );
+      const client = new QingpingClient(config.appKey, config.appSecret);
       this.client = client;
       await this.client.updateDevices();
+      this.log.info('Initialized');
+
+      setInterval(() => this.client?.updateDevices(), config.interval || 2000);
     } catch (error) {
       this.log.error('Error initializing platform', error?.toString?.());
       this.log.debug(error);
@@ -98,6 +100,7 @@ export class QingpingHomebridgePlatform implements DynamicPlatformPlugin {
   }
 
   public async discoverDevices() {
+    this.log.info('Start discovering devices');
     if (!this.client) {
       this.log.info('Client is not ready; skipping discoverDevices()');
       return;
@@ -105,6 +108,7 @@ export class QingpingHomebridgePlatform implements DynamicPlatformPlugin {
 
     try {
       await this.client.updateDevices();
+      this.log.info('Device list updated');
     } catch (e) {
       this.log.debug(e);
     }
@@ -114,6 +118,7 @@ export class QingpingHomebridgePlatform implements DynamicPlatformPlugin {
         device?.info?.product?.id,
       ),
     );
+    this.log.info(`Available devices: ${availableDevices.length}`);
 
     const discoveredAccessories: string[] = [];
     for (const device of availableDevices) {
@@ -159,6 +164,7 @@ export class QingpingHomebridgePlatform implements DynamicPlatformPlugin {
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [
           accessory,
         ]);
+        this.log.info(`Registered a new device: ${device.info.name}`);
 
         this.accessories.push(accessory);
       }

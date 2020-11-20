@@ -1,6 +1,5 @@
 import got, { Got } from 'got';
 
-const DEFAULT_INTERVAL = 5000;
 interface OauthAccess {
   access_token: string;
   expires_in: number;
@@ -69,7 +68,6 @@ export class Client {
   public constructor(
     private readonly appKey: string,
     private readonly appSecret: string,
-    private readonly interval = DEFAULT_INTERVAL,
   ) {
     this.got = got.extend();
   }
