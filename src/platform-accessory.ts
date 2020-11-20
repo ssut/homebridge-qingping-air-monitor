@@ -159,6 +159,17 @@ export class QingpingAirMonitorAccessory {
       this.config.co2Name ?? 'Carbon Dioxide',
     );
     carbonDioxideService
+      .getCharacteristic(this.platform.Characteristic.CarbonDioxideDetected)
+      .on('get', (callback) => {
+        const detected =
+          this.data.co2.value > 2000
+            ? this.platform.Characteristic.CarbonDioxideDetected
+                .CO2_LEVELS_ABNORMAL
+            : this.platform.Characteristic.CarbonDioxideDetected
+                .CO2_LEVELS_NORMAL;
+        callback(null, detected);
+      });
+    carbonDioxideService
       .getCharacteristic(this.platform.Characteristic.CarbonDioxideLevel)
       .on('get', this.onCharacteristicGetValue.bind(this, 'co2'));
 
