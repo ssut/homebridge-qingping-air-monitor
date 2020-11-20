@@ -4,6 +4,7 @@ import {
   CharacteristicValue,
   CharacteristicSetCallback,
   CharacteristicGetCallback,
+  Characteristic,
 } from 'homebridge';
 
 import {
@@ -11,6 +12,21 @@ import {
   QingpingHomebridgePlatformConfig,
 } from './platform';
 import { QingpingDevice, QingpingDeviceData } from './qingping';
+
+export type AirQualityLevelCondition = Partial<
+  Record<keyof QingpingDeviceData, number>
+>;
+
+export type AirQualityLevel = (
+  | {
+      under: AirQualityLevelCondition;
+    }
+  | {
+      over: AirQualityLevelCondition;
+    }
+) & {
+  airQuality: number;
+};
 
 /**
  * Platform Accessory
@@ -132,6 +148,86 @@ export class QingpingAirMonitorAccessory {
     return batteryService;
   }
 
+  private getAirQuality(): number {
+    const levels: AirQualityLevel[] = [
+      {
+        under: {
+          pm25: 12,
+          tvoc: 65,
+          co2: 1000,
+        },
+        airQuality: this.platform.Characteristic.AirQuality.EXCELLENT,
+      },
+      {
+        under: {
+          pm25: 35,
+          tvoc: 220,
+          co2: 1250,
+        },
+        airQuality: this.platform.Characteristic.AirQuality.GOOD,
+      },
+      {
+        under: {
+          pm25: 55,
+          tvoc: 660,
+          co2: 1500,
+        },
+        airQuality: this.platform.Characteristic.AirQuality.FAIR,
+      },
+      {
+        under: {
+          pm25: 150,
+          tvoc: 2000,
+          co2: 2000,
+        },
+        airQuality: this.platform.Characteristic.AirQuality.INFERIOR,
+      },
+      {
+        over: {
+          pm25: 150,
+          tvoc: 2000,
+          co2: 2000,
+        },
+        airQuality: this.platform.Characteristic.AirQuality.POOR,
+      },
+    ];
+
+    let airQuality = this.platform.Characteristic.AirQuality.UNKNOWN;
+    for (const level of levels) {
+      let key: 'under' | 'over';
+      if ('under' in level) {
+        key = 'under';
+      } else {
+        key = 'over';
+      }
+
+      const matches: boolean[] = [];
+      const condition: AirQualityLevelCondition = level[key];
+      for (const [dataKey, targetValue] of Object.entries(condition)) {
+        switch (key) {
+          case 'under':
+            matches.push(
+              dataKey in this.data && this.data[dataKey].value < targetValue!,
+            );
+            break;
+
+          case 'over':
+            matches.push(
+              dataKey in this.data && this.data[dataKey].value > targetValue!,
+            );
+            break;
+        }
+      }
+
+      if (matches.every((x) => x)) {
+        airQuality = level.airQuality;
+        break;
+      }
+    }
+
+    return airQuality;
+  }
+
   private getAirQualityService() {
     const airQualityService =
       this.accessory.getService(this.platform.Service.AirQualitySensor) ??
@@ -141,11 +237,27 @@ export class QingpingAirMonitorAccessory {
       this.config.aqiName ?? 'Air Quality',
     );
     airQualityService
+      .getCharacteristic(this.platform.Characteristic.AirQuality)
+      .on('get', (callback) => callback(null, this.getAirQuality()));
+    airQualityService
       .getCharacteristic(this.platform.Characteristic.PM2_5Density)
       .on('get', this.onCharacteristicGetValue.bind(this, 'pm25'));
     airQualityService
       .getCharacteristic(this.platform.Characteristic.VOCDensity)
-      .on('get', this.onCharacteristicGetValue.bind(this, 'tvoc'));
+      .on('get', (callback) => {
+        // based on ppb
+        // μg/m3 = (ppb)*(12.187)*(M) / (273.15 + °C)
+        // where M is the molecular weight of the gaseous pollutant. An atmospheric pressure of 1 atmosphere is assumed.
+        // benzene: 1 ppb = 3.19 μg/m3
+        let value = this.data.tvoc.value;
+        switch (this.config.tvocUnit) {
+          case 'ppb':
+            value = this.data.tvoc.value * 3.19;
+            break;
+        }
+
+        callback(null, value);
+      });
 
     return airQualityService;
   }

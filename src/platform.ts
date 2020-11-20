@@ -29,6 +29,7 @@ export interface QingpingHomebridgePlatformConfig extends PlatformConfig {
   humidityName?: string;
   co2Name?: string;
   aqiName?: string;
+  tvocUnit?: 'ppb' | 'ugm3';
 }
 
 /**
