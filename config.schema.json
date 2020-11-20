@@ -1,5 +1,5 @@
 {
-  "pluginAlias": "ExampleHomebridgePlugin",
+  "pluginAlias": "QingpingAirMonitorPlugin",
   "pluginType": "platform",
   "singular": true,
   "schema": {

@@ -1,120 +1,178 @@
-import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge';
+import {
+  APIEvent,
+  API,
+  DynamicPlatformPlugin,
+  Logger,
+  PlatformAccessory,
+  PlatformConfig,
+  Service,
+  Characteristic,
+} from 'homebridge';
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
-import { ExamplePlatformAccessory } from './platformAccessory';
+import { QingpingAirMonitorAccessory } from './platform-accessory';
+import {
+  QingpingClient,
+  QingpingDeviceInfo,
+  QingpingDeviceProductId,
+} from './qingping';
+import { promisify } from 'util';
+
+const sleep = promisify(setTimeout);
+
+export interface QingpingHomebridgePlatformConfig extends PlatformConfig {
+  appKey: string;
+  appSecret: string;
+  interval?: number;
+
+  temperatureName?: string;
+  humidityName?: string;
+  co2Name?: string;
+  aqiName?: string;
+}
 
 /**
  * HomebridgePlatform
  * This class is the main constructor for your plugin, this is where you should
  * parse the user config and discover/register accessories with Homebridge.
  */
-export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
+export class QingpingHomebridgePlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service = this.api.hap.Service;
-  public readonly Characteristic: typeof Characteristic = this.api.hap.Characteristic;
+  public readonly Characteristic: typeof Characteristic = this.api.hap
+    .Characteristic;
 
   // this is used to track restored cached accessories
   public readonly accessories: PlatformAccessory[] = [];
 
-  constructor(
+  private didFinishLaunching: Promise<void>;
+  private handleFinishLaunching?: () => void;
+
+  private client?: QingpingClient;
+
+  public constructor(
     public readonly log: Logger,
     public readonly config: PlatformConfig,
     public readonly api: API,
   ) {
+    this.didFinishLaunching = new Promise((resolve) => {
+      this.handleFinishLaunching = resolve;
+    });
     this.log.debug('Finished initializing platform:', this.config.name);
 
-    // When this event is fired it means Homebridge has restored all cached accessories from disk.
-    // Dynamic Platform plugins should only register new accessories after this event was fired,
-    // in order to ensure they weren't added to homebridge already. This event can also be used
-    // to start discovery of new accessories.
-    this.api.on('didFinishLaunching', () => {
+    this.api.on(APIEvent.DID_FINISH_LAUNCHING, () => {
       log.debug('Executed didFinishLaunching callback');
-      // run the method to discover / register your devices as accessories
-      this.discoverDevices();
+      this.handleFinishLaunching?.();
     });
   }
 
-  /**
-   * This function is invoked when homebridge restores cached accessories from disk at startup.
-   * It should be used to setup event handlers for characteristics and update respective values.
-   */
-  configureAccessory(accessory: PlatformAccessory) {
-    this.log.info('Loading accessory from cache:', accessory.displayName);
+  public async initialize() {
+    const config = this.config as QingpingHomebridgePlatformConfig;
 
-    // add the restored accessory to the accessories cache so we can track if it has already been registered
-    this.accessories.push(accessory);
+    try {
+      const client = new QingpingClient(
+        config.appKey,
+        config.appSecret,
+        config.interval || 5000,
+      );
+      this.client = client;
+      await this.client.updateDevices();
+    } catch (error) {
+      this.log.error('Error initializing platform', error?.toString?.());
+      this.log.debug(error);
+    }
   }
 
-  /**
-   * This is an example method showing how to register discovered accessories.
-   * Accessories must only be registered once, previously created accessories
-   * must not be registered again to prevent "duplicate UUID" errors.
-   */
-  discoverDevices() {
+  public configureAccessory(accessory: PlatformAccessory) {
+    this.log.info('Loading accessory from cache:', accessory.displayName);
 
-    // EXAMPLE ONLY
-    // A real plugin you would discover accessories from the local network, cloud services
-    // or a user-defined array in the platform config.
-    const exampleDevices = [
-      {
-        exampleUniqueId: 'ABCD',
-        exampleDisplayName: 'Bedroom',
-      },
-      {
-        exampleUniqueId: 'EFGH',
-        exampleDisplayName: 'Kitchen',
-      },
-    ];
+    const deviceInfo = accessory.context.device.info as QingpingDeviceInfo;
+    switch (deviceInfo.product.id) {
+      case QingpingDeviceProductId.AirMonitor:
+        new QingpingAirMonitorAccessory(this, accessory);
+        this.accessories.push(accessory);
+        break;
 
-    // loop over the discovered devices and register each one if it has not already been registered
-    for (const device of exampleDevices) {
+      default:
+        this.log.warn('Unsupported accessory:', accessory.displayName);
+    }
+  }
 
-      // generate a unique id for the accessory this should be generated from
-      // something globally unique, but constant, for example, the device serial
-      // number or MAC address
-      const uuid = this.api.hap.uuid.generate(device.exampleUniqueId);
+  public async discoverDevices() {
+    if (!this.client) {
+      this.log.info('Client is not ready; skipping discoverDevices()');
+      return;
+    }
 
-      // see if an accessory with the same uuid has already been registered and restored from
-      // the cached devices we stored in the `configureAccessory` method above
-      const existingAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
+    try {
+      await this.client.updateDevices();
+    } catch (e) {
+      this.log.debug(e);
+    }
+
+    const availableDevices = this.client.devices.filter((device) =>
+      Object.values(QingpingDeviceProductId).includes(
+        device?.info?.product?.id,
+      ),
+    );
+
+    const discoveredAccessories: string[] = [];
+    for (const device of availableDevices) {
+      const uuid = this.api.hap.uuid.generate(device.info.mac);
+      discoveredAccessories.push(uuid);
+
+      const existingAccessory = this.accessories.find(
+        (accessory) => accessory.UUID === uuid,
+      );
 
       if (existingAccessory) {
-        // the accessory already exists
-        if (device) {
-          this.log.info('Restoring existing accessory from cache:', existingAccessory.displayName);
+        this.log.info('Existing accessory:', device.info.name);
 
-          // if you need to update the accessory.context then you should run `api.updatePlatformAccessories`. eg.:
-          // existingAccessory.context.device = device;
-          // this.api.updatePlatformAccessories([existingAccessory]);
-
-          // create the accessory handler for the restored accessory
-          // this is imported from `platformAccessory.ts`
-          new ExamplePlatformAccessory(this, existingAccessory);
-          
-          // update accessory cache with any changes to the accessory details and information
-          this.api.updatePlatformAccessories([existingAccessory]);
-        } else if (!device) {
-          // it is possible to remove platform accessories at any time using `api.unregisterPlatformAccessories`, eg.:
-          // remove platform accessories when no longer present
-          this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [existingAccessory]);
-          this.log.info('Removing existing accessory from cache:', existingAccessory.displayName);
-        }
+        existingAccessory.context.device = device;
       } else {
-        // the accessory does not yet exist, so we need to create it
-        this.log.info('Adding new accessory:', device.exampleDisplayName);
+        this.log.info('Adding new accessory:', device.info.name);
 
         // create a new accessory
-        const accessory = new this.api.platformAccessory(device.exampleDisplayName, uuid);
+        const accessory = new this.api.platformAccessory(
+          device.info.name,
+          uuid,
+        );
 
         // store a copy of the device object in the `accessory.context`
         // the `context` property can be used to store any data about the accessory you may need
         accessory.context.device = device;
 
-        // create the accessory handler for the newly create accessory
-        // this is imported from `platformAccessory.ts`
-        new ExamplePlatformAccessory(this, accessory);
+        switch (device.info.product.id) {
+          case QingpingDeviceProductId.AirMonitor:
+            new QingpingAirMonitorAccessory(this, accessory);
+            break;
+
+          default:
+            this.log.warn(
+              'Unsupported device:',
+              device.info.product.id,
+              device.info.product.en_name,
+            );
+            continue;
+        }
 
         // link the accessory to your platform
-        this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+        this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [
+          accessory,
+        ]);
+
+        this.accessories.push(accessory);
+      }
+    }
+
+    for (const accessory of this.accessories) {
+      if (!discoveredAccessories.some((uuid) => accessory.UUID === uuid)) {
+        this.log.info(
+          'Unregistering unknown accessory:',
+          accessory.displayName,
+        );
+        this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [
+          accessory,
+        ]);
       }
     }
   }

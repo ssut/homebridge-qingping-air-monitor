@@ -1,19 +1,17 @@
 {
-  "private": true,
-  "displayName": "Plugin Name",
-  "name": "homebridge-plugin-name",
+  "name": "homebridge-qingping-air-monitor",
   "version": "1.0.0",
-  "description": "A short description about what your plugin does.",
+  "description": "",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git://github.com/USERNAME/GITHUB_PROJECT_NAME.git"
+    "url": "git://github.com/ssut/homebridge-qingping-air-monitor.git"
   },
   "bugs": {
-    "url": "https://github.com/USERNAME/GITHUB_PROJECT_NAME/issues"
+    "url": "https://github.com/ssut/homebridge-qingping-air-monitor/issues"
   },
   "engines": {
-    "node": ">=10.17.0",
+    "node": ">=12.0.0",
     "homebridge": ">=1.0.0"
   },
   "main": "dist/index.js",
@@ -26,7 +24,9 @@
   "keywords": [
     "homebridge-plugin"
   ],
-  "dependencies": {},
+  "dependencies": {
+    "got": "^11.8.0"
+  },
   "devDependencies": {
     "@types/node": "^14.14.6",
     "@typescript-eslint/eslint-plugin": "^4.6.1",
@@ -34,6 +34,7 @@
     "eslint": "^7.13.0",
     "homebridge": "^1.2.3",
     "nodemon": "^2.0.6",
+    "prettier": "^2.2.0",
     "rimraf": "^3.0.2",
     "ts-node": "^9.0.0",
     "typescript": "^4.0.5"
