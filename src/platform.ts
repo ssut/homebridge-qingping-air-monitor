@@ -139,6 +139,7 @@ export class QingpingHomebridgePlatform implements DynamicPlatformPlugin {
         this.log.info('Existing accessory:', device.info.name);
 
         existingAccessory.context.device = device;
+        this.api.updatePlatformAccessories([existingAccessory]);
       } else {
         this.log.info('Adding new accessory:', device.info.name);
 
