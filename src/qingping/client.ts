@@ -78,7 +78,7 @@ export class Client {
       {
         responseType: 'json',
         headers: {
-          'content-type': 'x-www-form-urlencoded',
+          'content-type': 'application/x-www-form-urlencoded',
           authorization: `Basic ${Buffer.from(
             `${this.appKey}:${this.appSecret}`,
           ).toString('base64')}`,
