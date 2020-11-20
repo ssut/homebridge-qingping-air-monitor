@@ -107,6 +107,9 @@ export class Client {
     const response = await this.got.get<GetDevicesResponse>(
       'https://apis.cleargrass.com/v1/apis/devices',
       {
+        headers: {
+          authorization: `Bearer ${this.access!.access_token}`,
+        },
         responseType: 'json',
         searchParams: {
           timestamp: Date.now(),
