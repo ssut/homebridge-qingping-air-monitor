@@ -83,11 +83,19 @@ export class QingpingHomebridgePlatform implements DynamicPlatformPlugin {
       await this.client.updateDevices();
       this.log.info('Initialized');
 
-      setInterval(() => this.client?.updateDevices(), config.interval || 2000);
+      setInterval(() => this.updateValues(), config.interval || 2000);
     } catch (error) {
       this.log.error('Error initializing platform', error?.toString?.());
       this.log.debug(error);
     }
+  }
+
+  public async updateValues() {
+    if (!this.client) {
+      return;
+    }
+
+    await this.discoverDevices();
   }
 
   public configureAccessory(accessory: PlatformAccessory) {
@@ -106,7 +114,6 @@ export class QingpingHomebridgePlatform implements DynamicPlatformPlugin {
   }
 
   public async discoverDevices() {
-    this.log.info('Start discovering devices');
     if (!this.client) {
       this.log.info('Client is not ready; skipping discoverDevices()');
       return;
@@ -114,7 +121,6 @@ export class QingpingHomebridgePlatform implements DynamicPlatformPlugin {
 
     try {
       await this.client.updateDevices();
-      this.log.info('Device list updated');
     } catch (e) {
       this.log.debug(e);
     }
@@ -136,10 +142,9 @@ export class QingpingHomebridgePlatform implements DynamicPlatformPlugin {
       );
 
       if (existingAccessory) {
-        this.log.info('Existing accessory:', device.info.name);
-
         existingAccessory.context.device = device;
         this.api.updatePlatformAccessories([existingAccessory]);
+        this.log.info('Updated accessory:', device.info.name);
       } else {
         this.log.info('Adding new accessory:', device.info.name);
 
