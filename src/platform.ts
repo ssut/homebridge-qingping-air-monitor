@@ -72,6 +72,11 @@ export class QingpingHomebridgePlatform implements DynamicPlatformPlugin {
     const config = this.config as QingpingHomebridgePlatformConfig;
 
     try {
+      this.log.info(
+        `Using the following appKey: ${
+          config.appKey
+        }, and appSecret: ${config.appSecret.substr(0, 6)}...`,
+      );
       const client = new QingpingClient(config.appKey, config.appSecret);
       this.client = client;
       await this.client.updateDevices();
